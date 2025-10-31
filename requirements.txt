@@ -1,0 +1,11 @@
+python-telegram-bot==20.0
+python-dotenv==1.0.0
+google-generativeai
+telethon
+chromadb>=0.4.0
+pysqlite3-binary
+
+# V2: مكتبات الخطة البديلة (البحث في الويب)
+googlesearch-python
+beautifulsoup4
+httpx
