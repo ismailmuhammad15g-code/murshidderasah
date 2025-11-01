@@ -6,6 +6,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from database import *
 import logging
 import html
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -372,12 +373,13 @@ async def show_book_details_with_gallery(query, context, book_id):
     # الحصول على جميع الملفات
     files = get_library_files(book_id)
     
-    # إذا كان هناك عدة ملفات، أرسلها كـ media group
+    # إذا كان هناك عدة ملفات وكانت صوراً، أرسلها كـ media group
     if len(files) > 1:
         media_group = []
         
-        for idx, (file_id, file_type, caption) in enumerate(files):
-            if file_type == 'photo':
+        for idx, (file_id, file_type, caption, local_path) in enumerate(files):
+            # فقط الصور التي لها file_id
+            if file_type == 'photo' and file_id:
                 from telegram import InputMediaPhoto
                 media_item = InputMediaPhoto(
                     media=file_id,
@@ -387,10 +389,13 @@ async def show_book_details_with_gallery(query, context, book_id):
         
         # إرسال المعرض إذا كان هناك صور
         if media_group:
-            await context.bot.send_media_group(
-                chat_id=query.from_user.id,
-                media=media_group
-            )
+            try:
+                await context.bot.send_media_group(
+                    chat_id=query.from_user.id,
+                    media=media_group
+                )
+            except Exception as e:
+                print(f"❌ خطأ في إرسال المعرض: {e}")
     
     # تحديد وضع العرض حسب نوع المحتوى
     content_type = item[5] if len(item) > 5 else 'book'
@@ -458,6 +463,7 @@ async def show_gallery_handler(query, context, book_id):
     """عرض معرض الصور بشكل جميل"""
     from telegram import InputMediaPhoto
     from database import get_library_files
+    import os
     
     files = get_library_files(book_id)
     
@@ -468,12 +474,18 @@ async def show_gallery_handler(query, context, book_id):
     # تجميع الصور والمستندات
     photos = []
     documents = []
+    local_files = []
     
-    for idx, (file_id, file_type, caption) in enumerate(files):
-        if file_type == 'photo':
-            photos.append((file_id, caption))
-        else:
-            documents.append((file_id, caption))
+    for idx, (file_id, file_type, caption, local_path) in enumerate(files):
+        # التحقق من وجود file_id أو local_path
+        if file_id:
+            if file_type == 'photo':
+                photos.append((file_id, caption))
+            else:
+                documents.append((file_id, caption))
+        elif local_path:
+            # إذا لم يكن هناك file_id، استخدم الملف المحلي
+            local_files.append((local_path, caption, file_type))
     
     # إرسال الصور كمعرض
     if photos:
@@ -493,18 +505,94 @@ async def show_gallery_handler(query, context, book_id):
         
         await query.answer(f"✅ تم إرسال {len(photos)} صورة", show_alert=False)
     
-    # إرسال المستندات
+    # إرسال المستندات من file_id
     if documents:
         for file_id, caption in documents:
-            await context.bot.send_document(
+            try:
+                await context.bot.send_document(
+                    chat_id=query.from_user.id,
+                    document=file_id,
+                    caption=caption or "📎 مرفق"
+                )
+            except Exception as e:
+                print(f"❌ خطأ في إرسال المستند: {e}")
+    
+    # إرسال الملفات المحلية
+    if local_files:
+        # إرسال رسالة تحذيرية للملفات الكبيرة
+        total_size = 0
+        for local_path, caption, file_type in local_files:
+            file_path = local_path.replace('\\', '/')
+            if not os.path.isabs(file_path):
+                file_path = os.path.join(os.getcwd(), file_path)
+            
+            if os.path.exists(file_path):
+                total_size += os.path.getsize(file_path)
+        
+        # إذا كان حجم الملفات أكبر من 1 MB، أرسل تحذير
+        if total_size > 1024 * 1024:  # 1 MB
+            await context.bot.send_message(
                 chat_id=query.from_user.id,
-                document=file_id,
-                caption=caption or "📎 مرفق"
+                text=f"⏳ جاري رفع الملفات... ({total_size / (1024*1024):.1f} MB)\n"
+                     f"قد يستغرق الأمر بعض الوقت، يرجى الانتظار..."
             )
+        
+        for local_path, caption, file_type in local_files:
+            try:
+                # تصحيح المسار
+                file_path = local_path.replace('\\', '/')
+                if not os.path.isabs(file_path):
+                    file_path = os.path.join(os.getcwd(), file_path)
+                
+                if os.path.exists(file_path):
+                    # التحقق من حجم الملف
+                    file_size = os.path.getsize(file_path)
+                    
+                    # Telegram يدعم ملفات حتى 50 MB للبوتات
+                    if file_size > 50 * 1024 * 1024:  # 50 MB
+                        await context.bot.send_message(
+                            chat_id=query.from_user.id,
+                            text=f"❌ الملف كبير جداً ({file_size / (1024*1024):.1f} MB)\n"
+                                 f"الحد الأقصى: 50 MB"
+                        )
+                        continue
+                    
+                    with open(file_path, 'rb') as f:
+                        await context.bot.send_document(
+                            chat_id=query.from_user.id,
+                            document=f,
+                            caption=caption or "📎 مرفق",
+                            filename=os.path.basename(file_path),
+                            read_timeout=120,  # 2 دقيقة للقراءة
+                            write_timeout=120  # 2 دقيقة للكتابة
+                        )
+                else:
+                    print(f"❌ الملف غير موجود: {file_path}")
+                    await context.bot.send_message(
+                        chat_id=query.from_user.id,
+                        text=f"❌ عذراً، الملف غير موجود على الخادم"
+                    )
+            except asyncio.TimeoutError:
+                logger.error(f"⏱️ انتهت مهلة رفع الملف: {local_path}")
+                await context.bot.send_message(
+                    chat_id=query.from_user.id,
+                    text=f"⏱️ عذراً، انتهت مهلة رفع الملف.\n"
+                         f"الملف كبير جداً. يرجى المحاولة لاحقاً أو طلبه من المسؤول."
+                )
+            except Exception as e:
+                logger.error(f"❌ خطأ في إرسال الملف المحلي: {e}")
+                await context.bot.send_message(
+                    chat_id=query.from_user.id,
+                    text=f"❌ حدث خطأ في إرسال الملف: {str(e)[:100]}"
+                )
+        
+        if not photos and not documents:
+            await query.answer(f"✅ تم إرسال {len(local_files)} ملف", show_alert=False)
 
 async def download_all_files_handler(query, context, book_id):
     """تحميل جميع ملفات الكتاب"""
     from database import get_library_files, increment_downloads
+    import os
     
     files = get_library_files(book_id)
     
@@ -514,29 +602,101 @@ async def download_all_files_handler(query, context, book_id):
     
     await query.answer(f"📥 جاري إرسال {len(files)} ملف...")
     
+    # حساب الحجم الكلي للملفات المحلية
+    total_size = 0
+    for file_id, file_type, caption, local_path in files:
+        if not file_id and local_path:
+            file_path = local_path.replace('\\', '/')
+            if not os.path.isabs(file_path):
+                file_path = os.path.join(os.getcwd(), file_path)
+            if os.path.exists(file_path):
+                total_size += os.path.getsize(file_path)
+    
+    # إرسال تحذير للملفات الكبيرة
+    if total_size > 1024 * 1024:  # أكبر من 1 MB
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text=f"⏳ جاري رفع الملفات... ({total_size / (1024*1024):.1f} MB)\n"
+                 f"قد يستغرق الأمر بعض الوقت، يرجى الانتظار..."
+        )
+    
     # زيادة عداد التحميلات
     increment_downloads(book_id)
     
     # إرسال كل ملف
-    for idx, (file_id, file_type, caption) in enumerate(files, 1):
+    sent_count = 0
+    for idx, (file_id, file_type, caption, local_path) in enumerate(files, 1):
         try:
-            if file_type == 'photo':
-                await context.bot.send_photo(
-                    chat_id=query.from_user.id,
-                    photo=file_id,
-                    caption=f"📸 الملف {idx}/{len(files)}\n{caption or ''}"
-                )
-            else:
-                await context.bot.send_document(
-                    chat_id=query.from_user.id,
-                    document=file_id,
-                    caption=f"📎 الملف {idx}/{len(files)}\n{caption or ''}"
-                )
+            # محاولة الإرسال من file_id أولاً
+            if file_id:
+                if file_type == 'photo':
+                    await context.bot.send_photo(
+                        chat_id=query.from_user.id,
+                        photo=file_id,
+                        caption=f"📸 الملف {idx}/{len(files)}\n{caption or ''}"
+                    )
+                else:
+                    await context.bot.send_document(
+                        chat_id=query.from_user.id,
+                        document=file_id,
+                        caption=f"📎 الملف {idx}/{len(files)}\n{caption or ''}"
+                    )
+                sent_count += 1
+            # إذا لم يكن هناك file_id، استخدم الملف المحلي
+            elif local_path:
+                file_path = local_path.replace('\\', '/')
+                if not os.path.isabs(file_path):
+                    file_path = os.path.join(os.getcwd(), file_path)
+                
+                if os.path.exists(file_path):
+                    # التحقق من حجم الملف
+                    file_size = os.path.getsize(file_path)
+                    
+                    if file_size > 50 * 1024 * 1024:  # 50 MB
+                        await context.bot.send_message(
+                            chat_id=query.from_user.id,
+                            text=f"⚠️ الملف {idx} كبير جداً ({file_size / (1024*1024):.1f} MB) وتم تخطيه"
+                        )
+                        continue
+                    
+                    with open(file_path, 'rb') as f:
+                        await context.bot.send_document(
+                            chat_id=query.from_user.id,
+                            document=f,
+                            caption=f"📎 الملف {idx}/{len(files)}\n{caption or ''}",
+                            filename=os.path.basename(file_path),
+                            read_timeout=120,
+                            write_timeout=120
+                        )
+                    sent_count += 1
+                else:
+                    print(f"❌ الملف غير موجود: {file_path}")
+                    await context.bot.send_message(
+                        chat_id=query.from_user.id,
+                        text=f"⚠️ الملف {idx} غير موجود على الخادم"
+                    )
+            
+        except asyncio.TimeoutError:
+            logger.error(f"⏱️ انتهت مهلة رفع الملف {idx}")
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text=f"⏱️ انتهت مهلة رفع الملف {idx}. سيتم تخطيه."
+            )
         except Exception as e:
-            print(f"خطأ في إرسال الملف {idx}: {e}")
+            logger.error(f"❌ خطأ في إرسال الملف {idx}: {e}")
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text=f"⚠️ خطأ في إرسال الملف {idx}: {str(e)[:50]}"
+            )
     
     # رسالة تأكيد
-    await context.bot.send_message(
-        chat_id=query.from_user.id,
-        text=f"✅ تم إرسال جميع الملفات ({len(files)} ملف)"
-    )
+    if sent_count > 0:
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text=f"✅ تم إرسال {sent_count} من {len(files)} ملف"
+        )
+    else:
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text=f"❌ لم يتم إرسال أي ملفات. الرجاء المحاولة لاحقاً."
+        )

@@ -70,3 +70,8 @@ class Config:
     
     # Database Path
     DB_PATH = os.getenv("DB_PATH", "./db")
+    
+    # Flask App Configuration
+    FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "a-very-secret-key-for-flask")
+    UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "static/uploads")
+    SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI", "sqlite:///database.db")

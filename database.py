@@ -715,7 +715,7 @@ def get_library_files(library_item_id):
     """الحصول على جميع ملفات عنصر في المكتبة"""
     conn = sqlite3.connect('school_bot.db')
     c = conn.cursor()
-    c.execute('''SELECT file_id, file_type, caption 
+    c.execute('''SELECT file_id, file_type, caption, local_path 
                  FROM library_files 
                  WHERE library_item_id = ?
                  ORDER BY file_order''',

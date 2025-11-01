@@ -1,0 +1,145 @@
+{% extends "layout.html" %}
+
+{% block title %}الاستفسار الذكي - بوابة مرشد الدراسة{% endblock %}
+
+{% block extra_css %}
+<style>
+    .query-form {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        padding: 2rem;
+        color: white;
+        margin-bottom: 2rem;
+    }
+    
+    .answer-box {
+        background: #f8f9fa;
+        border-right: 5px solid #667eea;
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .sources-box {
+        background: white;
+        border: 2px dashed #667eea;
+        padding: 1.5rem;
+        border-radius: 10px;
+    }
+    
+    .source-link {
+        display: block;
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        background: white;
+        border-radius: 8px;
+        text-decoration: none;
+        color: #667eea;
+        transition: all 0.2s;
+        border: 1px solid #e0e0e0;
+    }
+    
+    .source-link:hover {
+        transform: translateX(-5px);
+        box-shadow: 0 3px 10px rgba(102, 126, 234, 0.2);
+        border-color: #667eea;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    
+    <div class="text-center mb-4">
+        <h2><i class="fas fa-robot text-primary"></i> الاستفسار الذكي</h2>
+        <p class="text-muted">اطرح سؤالك وسأبحث لك في آلاف الرسائل من القناة الرسمية</p>
+    </div>
+    
+    <!-- نموذج السؤال -->
+    <div class="query-form">
+        <form method="POST" action="{{ url_for('smart_query') }}">
+            <div class="mb-3">
+                <label for="question" class="form-label">
+                    <i class="fas fa-question-circle"></i> سؤالك
+                </label>
+                <textarea class="form-control form-control-lg" id="question" name="question" 
+                          rows="3" required placeholder="مثال: ما هي شروط الالتحاق بالمعهد الأزهري؟"
+                          style="font-size: 1.1rem;">{% if question %}{{ question }}{% endif %}</textarea>
+            </div>
+            
+            <button type="submit" class="btn btn-light btn-lg w-100">
+                <i class="fas fa-search"></i> بحث واستفسار
+            </button>
+        </form>
+    </div>
+    
+    <!-- عرض الإجابة -->
+    {% if answer %}
+    <div class="answer-section">
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4><i class="fas fa-comment-dots text-success"></i> الإجابة</h4>
+            <span class="badge bg-success">تم الإجابة بنجاح</span>
+        </div>
+        
+        <div class="answer-box">
+            <div style="white-space: pre-wrap; line-height: 1.8;">{{ answer }}</div>
+        </div>
+        
+        {% if links %}
+        <div class="sources-box">
+            <h5 class="mb-3">
+                <i class="fas fa-link text-primary"></i> المصادر ({{ links|length }})
+            </h5>
+            <div class="sources-list">
+                {% for link in links %}
+                <a href="{{ link }}" target="_blank" class="source-link">
+                    <i class="fas fa-external-link-alt"></i> {{ link }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+    </div>
+    {% endif %}
+    
+    <!-- أمثلة على الأسئلة -->
+    {% if not answer %}
+    <div class="row mt-5">
+        <div class="col-12">
+            <h5 class="mb-3"><i class="fas fa-lightbulb text-warning"></i> أمثلة على الأسئلة:</h5>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-primary">
+                        <i class="fas fa-clipboard-list"></i> الشروط والتسجيل
+                    </h6>
+                    <ul class="list-unstyled mb-0">
+                        <li>• ما هي شروط التسجيل في المعهد؟</li>
+                        <li>• متى يبدأ التسجيل للعام الدراسي الجديد؟</li>
+                        <li>• ما هي الأوراق المطلوبة للتسجيل؟</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-success">
+                        <i class="fas fa-calendar-alt"></i> المواعيد والامتحانات
+                    </h6>
+                    <ul class="list-unstyled mb-0">
+                        <li>• متى موعد امتحانات نهاية العام؟</li>
+                        <li>• ما هو جدول الامتحانات؟</li>
+                        <li>• كيف يمكنني الاستعلام عن نتيجتي؟</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+</div>
+{% endblock %}

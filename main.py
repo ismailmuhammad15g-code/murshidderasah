@@ -177,91 +177,12 @@ async def handle_smart_query(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("عذراً، خدمة الذكاء الاصطناعي متوقفة حالياً.")
         return
 
-    # رسالة انتظار ودودة وواضحة
-    wait_msg = await update.message.reply_text(
-        "🔍 **جاري البحث في سجلات القناة...**\n\n"
-        "☕ لحظات من فضلك، سأبحث لك عن أفضل إجابة...",
-        parse_mode='Markdown'
-    )
+    # رسالة انتظار ودودة
+    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING) 
     
     try:
         # البحث المعزز في قاعدة البيانات
         evidence_list = vector_store.search_database(user_question)
-        logger.info(f"🔍 البحث عن: '{user_question}' - تم العثور على {len(evidence_list) if evidence_list else 0} دليل")
-        
-        # 🔍 فحص جودة النتائج - هل لها علاقة بالسؤال؟
-        if evidence_list:
-            # استخراج كلمات مفتاحية من السؤال
-            question_keywords = set(user_question.lower().split())
-            question_keywords = {w for w in question_keywords if len(w) > 2}  # فقط الكلمات الطويلة
-            
-            # فحص إذا كانت النتائج تحتوي على كلمات مفتاحية من السؤال
-            relevant_count = 0
-            for ev in evidence_list[:3]:  # فحص أول 3 نتائج فقط
-                ev_words = set(ev['text'].lower().split())
-                if question_keywords & ev_words:  # إذا هناك تقاطع
-                    relevant_count += 1
-            
-            # إذا لم يكن هناك أي تقاطع، فعّل الخطة البديلة مباشرة
-            if relevant_count == 0:
-                logger.warning(f"⚠️ النتائج غير ذات صلة! التفعيل المباشر للخطة البديلة...")
-                
-                # حذف رسالة الانتظار
-                try:
-                    await wait_msg.delete()
-                except:
-                    pass
-                
-                # تفعيل الخطة البديلة مباشرة
-                await update.message.reply_text(
-                    "🔍 **لم أجد معلومات ذات صلة في سجلات القناة...**\n\n"
-                    "🌐 لحظات، سأبحث لك الآن في **الموقع الرسمي لقطاع المعاهد الأزهرية**...",
-                    parse_mode='Markdown'
-                )
-                
-                import web_search 
-                web_evidence = await web_search.search_azhar_website(user_question)
-                
-                if not web_evidence:
-                    await update.message.reply_text(
-                        "😔 بحثت لك في الموقع الرسمي أيضاً ولكن للأسف لم أجد شيئاً.\n\n"
-                        "📞 **ننصحك بـ:**\n"
-                        "• الاتصال بإدارة المعهد مباشرة\n"
-                        "• طرح السؤال في القناة الرسمية"
-                    )
-                    return
-                
-                # برومبت الويب
-                web_prompt = f"""
-أنت "مرشد الدراسة". لم أجد معلومات في تليجرام.
-الآن، أجب على سؤال الطالب باستخدام هذه الأدلة **من الموقع الرسمي**.
-
-**سؤال الطالب:**
-{user_question}
-
-**الأدلة من الموقع الرسمي:**
-{web_evidence}
-
-**تعليمات:**
-- كن ودوداً ومفيداً
-- اذكر أن المعلومة من "الموقع الرسمي"
-
-**الإجابة:**
-"""
-                
-                web_response = chat_model.generate_content(web_prompt)
-                await update.message.reply_text(
-                    web_response.text + "\n\n🌐 **المصدر:** الموقع الرسمي لقطاع المعاهد الأزهرية",
-                    disable_web_page_preview=True,
-                    parse_mode='Markdown'
-                )
-                return
-        
-        # حذف رسالة الانتظار
-        try:
-            await wait_msg.delete()
-        except:
-            pass
         
         # 🔄 اختيار النموذج التالي في الدور (Round Robin)
         current_model_index = chat_model_counter % len(chat_models)
@@ -308,141 +229,41 @@ async def handle_smart_query(update: Update, context: ContextTypes.DEFAULT_TYPE)
             doc_type = ev.get('type', 'unknown')  # admin or student
             evidence_context += f"--- دليل {i+1} (النوع: {doc_type}, الرابط: {ev['link']}) ---\n{ev['text']}\n\n"
 
-        # --- البرومبت المحسّن (أكثر إصراراً على استخدام الأدلة) ---
+        # --- البرومبت الودود والذكي (محدّث) ---
         enhanced_prompt = f"""
-أنت "مرشد الدراسة"، مساعد ذكي ومتخصص في تحليل رسائل تليجرام من قناة معهد البعوث.
+أنت "مرشد الدراسة"، مساعد ذكي، ودود، ومتخصص في مساعدة طلاب معهد البعوث. مهمتك هي الدردشة مع الطالب والإجابة على سؤاله.
 
 **سؤال الطالب:**
 {user_question}
 
-**الأدلة من القناة (عدد {len(evidence_list)} دليل):**
+**الأدلة التي تم العثور عليها (المصدر الوحيد):**
 {evidence_context}
 
-**تعليمات صارمة (اتبعها بدقة!):**
+**تعليمات الشخصية والرد (مهم جداً):**
+1.  **كن ودوداً:** ابدأ الرد بترحيب أو تعليق لطيف. لا تكن "روبوتاً".
+2.  **حلل الأدلة:** لديك أدلة من نوع "admin" (موثوقة ورسمية) وأدلة من نوع "student" (نقاشات قد تكون مفيدة).
+3.  **أعط الأولوية للأدمن:** إذا وجدت إجابة واضحة في دليل "admin"، أجب بها بثقة.
+4.  **استخدم نقاشات الطلاب:** إذا لم تجد إجابة "admin"، انظر إلى نقاشات "student". إذا كانت النقاشات مفيدة، يمكنك القول مثلاً: "لم أجد منشوراً رسمياً، ولكن يبدو من نقاشات الطلاب أن..."
+5.  **كن صادقاً (ولكن ودوداً):** إذا كانت *كل* الأدلة (الأدمن والطلاب) لا تجيب على السؤال، لا تقل "لم أجد إجابة". قل شيئاً مثل: "أهلاً بك! بحثت لك في سجلات القناة، لكن لم أجد معلومة واضحة بخصوص هذا الموضوع. ربما يمكنك توجيه السؤال مباشرة في القناة للاحتياط."
+6.  **لا تدردش خارج الموضوع:** ابقَ مركزاً على مساعدة الطالب في دراسته بالمعهد.
 
-1. **اقرأ كل دليل بعناية:** فحص نص كل دليل وابحث عن أي معلومة متعلقة بالسؤال (تواريخ، مواعيد، شروط، إلخ).
-
-2. **لخّص ما وجدته:** حتى لو لم تجد إجابة مباشرة، لخّص محتوى الأدلة وقل:
-   - "وجدت {len(evidence_list)} رسائل متعلقة، تتحدث عن..."
-   - "يبدو من الرسائل أن..."
-   - "تذكر الرسائل موضوع..."
-
-3. **أعط الأولوية للأدمن:** إذا وجدت دليل من نوع "admin"، استخدمه بثقة 100%.
-
-4. **استخدم نقاشات الطلاب:** إذا كانت الأدلة من نوع "student"، قل: "لم أجد منشوراً رسمياً، لكن حسب نقاشات الطلاب..."
-
-5. **ممنوع الرد بـ "لم أجد" بدون محاولة:** لو وجدت {len(evidence_list)} أدلة، يجب أن تقول شيئاً عنها! لخّص محتواها على الأقل.
-
-6. **فقط في الحالات النادرة:** إذا كانت كل الأدلة بلا معلومات مفيدة على الإطلاق، اعتذر وقل: "بحثت لك في سجلات القناة، لكن لم أجد معلومة واضحة."
-
-**صيغة الرد (ودود ومفيد):**
-أهلاً بك! 👋 [+الإجابة مباشرة]
+**الإجابة (بشكل ودود وتحليلي):**
 """
         # --- نهاية البرومبت ---
         
         response = chat_model.generate_content(enhanced_prompt)
         final_answer = response.text
         
-        # 🆕 V2: الخطة البديلة - فحص إذا كانت الإجابة ضعيفة (بذكاء)
-        # ملاحظة: لا نفعّل الخطة البديلة إذا كان هناك أي محتوى مفيد من الأدلة
-        # نفعّلها فقط إذا لم يجد Gemini أي معلومة مفيدة على الإطلاق
-        
-        # الشرط 1: هل عدد الأدلة قليل جداً؟ (أقل من 3 = ضعيف)
-        has_few_evidence = len(evidence_list) < 3
-        
-        # الشرط 2: هل الرد قصير جداً؟ (أقل من 100 حرف = فشل)
-        is_too_short = len(final_answer.strip()) < 100
-        
-        # الشرط 3: هل يحتوي على عبارات الفشل الكامل؟
-        total_failure_phrases = [
-            "لم أجد معلومة واضحة بخصوص هذا الموضوع",  # العبارة الدقيقة من البرومبت
-            "بحثت لك في سجلات القناة، لكن لم أجد",
-            "لا توجد معلومات",
-            "ليس لدي أي معلومات"
-        ]
-        is_total_failure = any(phrase in final_answer for phrase in total_failure_phrases)
-        
-        # الشرط 4: هل لم يذكر أي رابط أو دليل؟ (معناه فشل كامل)
-        has_useful_content = (
-            "https://t.me/" in final_answer or 
-            "يبدو من نقاشات الطلاب" in final_answer or
-            "وجدت" in final_answer or
-            "بحسب" in final_answer or
-            "حسب" in final_answer or
-            "يذكر" in final_answer
-        )
-        
-        # قرار الخطة البديلة: نفعّلها فقط إذا كان فشل *كامل*
-        # (أدلة قليلة + رد قصير أو فشل كامل) + لا محتوى مفيد
-        should_use_web_fallback = (has_few_evidence and (is_too_short or is_total_failure)) and not has_useful_content
-        
-        logger.info(f"🚦 فحص الخطة البديلة: أدلة={len(evidence_list)}, قصير={is_too_short}, فشل={is_total_failure}, محتوى={has_useful_content} → تفعيل={should_use_web_fallback}")
-        
-        if should_use_web_fallback:
-            logger.warning("⚠️ البحث في تليجرام فشل. بدء الخطة البديلة (البحث في الويب)...")
-            
-            # إرسال رسالة انتظار جديدة
-            await update.message.reply_text(
-                "لم أجد إجابة واضحة في سجلات القناة... 😥\n"
-                "لحظات، سأبحث لك الآن في **الموقع الرسمي لقطاع المعاهد الأزهرية**..."
-            )
-            
-            # استيراد ملف web_search
-            import web_search 
-            web_evidence = await web_search.search_azhar_website(user_question)
-            
-            if not web_evidence:
-                await update.message.reply_text(
-                    "😔 بحثت لك في الموقع الرسمي أيضاً ولكن للأسف لم أجد شيئاً.\n\n"
-                    "📞 **ننصحك بـ:**\n"
-                    "• الاتصال بإدارة المعهد مباشرة\n"
-                    "• طرح السؤال في القناة الرسمية"
-                )
-                return
-
-            # بناء برومبت جديد لـ Gemini مع أدلة الويب
-            web_prompt = f"""
-أنت "مرشد الدراسة". لقد فشل البحث في تليجرام.
-الآن، أجب على "سؤال الطالب" باستخدام هذه الأدلة **من الموقع الرسمي للأزهر**.
-
-**سؤال الطالب:**
-{user_question}
-
-**الأدلة من الموقع الرسمي (المصدر الوحيد):**
-{web_evidence}
-
-**تعليمات:**
-- كن ودوداً ومفيداً
-- اذكر أن المعلومة من "الموقع الرسمي"
-- إذا لم تجد إجابة واضحة، لخّص ما وجدته
-
-**الإجابة:**
-"""
-            
-            # استدعاء Gemini مرة أخرى
-            web_response = chat_model.generate_content(web_prompt)
-            final_web_answer = web_response.text
-            
-            # إرسال الرد النهائي من الويب
-            await update.message.reply_text(
-                final_web_answer + "\n\n🌐 **المصدر:** الموقع الرسمي لقطاع المعاهد الأزهرية",
-                disable_web_page_preview=True,
-                parse_mode='Markdown'
-            )
-            return  # إنهاء الدالة هنا
-        
-        # --- إذا نجح البحث من المرة الأولى، أكمل كالمعتاد ---
-        # 📏 بناء تذييل الأدلة مع ملخصات
-        evidence_footer = f"\n\n━━━━━━━━━━━━━━━━\n📚 **المصادر من القناة ({len(evidence_list)} دليل):**\n"
+        # 📌 بناء تذييل الأدلة يدوياً في Python
+        evidence_footer = "\n\n━━━━━━━━━━━━━━━━\n📚 **المصادر من القناة:**\n"
         
         if evidence_list:
-            # عرض ملخص لكل دليل (مع حماية Markdown)
-            for i, ev in enumerate(evidence_list[:6], 1):  # أول 6 أدلة فقط
-                doc_type_emoji = "📍" if ev.get('type') == 'admin' else "💬"
-                # استخراج ملخص قصير وحمايته من Markdown
-                raw_snippet = ev['text'][:80].replace('\n', ' ') if len(ev['text']) > 80 else ev['text'].replace('\n', ' ')
-                safe_snippet = escape_markdown(raw_snippet) + "..."
-                evidence_footer += f"{i}. {doc_type_emoji} {safe_snippet}\n   🔗 {ev['link']}\n\n"
+            # استخراج الروابط الفريدة
+            links = [ev['link'] for ev in evidence_list]
+            unique_links = list(dict.fromkeys(links))  # إزالة التكرار
+            
+            for i, link in enumerate(unique_links, 1):
+                evidence_footer += f"{i}. {link}\n"
         else:
             evidence_footer = "\n\n(لم يتم العثور على أدلة محددة)"
         
@@ -1887,7 +1708,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         content_type = item[5] if len(item) > 5 else 'book'
         
         # التحقق من أن العنصر ليس منشوراً أو مقالاً (لا يوجد ملف)
-        if not file_id or file_id == '' or content_type in ['post', 'article']:
+        if content_type in ['post', 'article']:
             await query.answer("⚠️ هذا المحتوى لا يحتوي على ملف للتحميل!", show_alert=True)
             return
         
@@ -1898,23 +1719,67 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("📥 جاري إرسال الكتاب...")
         
         try:
-            # إرسال حسب نوع الملف المحفوظ
-            if file_type == 'photo':
-                # إرسال كصورة
-                await context.bot.send_photo(
-                    chat_id=query.from_user.id,
-                    photo=file_id,
-                    caption=f"📚 **{title}**\n\n✅ تم التحميل بنجاح!",
-                    parse_mode='Markdown'
-                )
+            # محاولة الإرسال من file_id أولاً (إذا كان موجوداً)
+            if file_id and file_id != '':
+                # إرسال حسب نوع الملف المحفوظ
+                if file_type == 'photo':
+                    await context.bot.send_photo(
+                        chat_id=query.from_user.id,
+                        photo=file_id,
+                        caption=f"📚 **{title}**\n\n✅ تم التحميل بنجاح!",
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await context.bot.send_document(
+                        chat_id=query.from_user.id,
+                        document=file_id,
+                        caption=f"📚 **{title}**\n\n✅ تم التحميل بنجاح!",
+                        parse_mode='Markdown'
+                    )
             else:
-                # إرسال كمستند (PDF وغيره)
-                await context.bot.send_document(
-                    chat_id=query.from_user.id,
-                    document=file_id,
-                    caption=f"📚 **{title}**\n\n✅ تم التحميل بنجاح!",
-                    parse_mode='Markdown'
-                )
+                # إذا لم يكن هناك file_id، جرب الملفات من library_files
+                from database import get_library_files
+                import os
+                
+                files = get_library_files(book_id)
+                
+                if not files:
+                    await query.answer("❌ لم يتم العثور على ملفات لهذا الكتاب", show_alert=True)
+                    return
+                
+                # إرسال أول ملف متاح
+                for f_id, f_type, caption, local_path in files:
+                    if f_id:
+                        # إرسال من file_id
+                        await context.bot.send_document(
+                            chat_id=query.from_user.id,
+                            document=f_id,
+                            caption=f"📚 **{title}**\n\n✅ تم التحميل بنجاح!",
+                            parse_mode='Markdown'
+                        )
+                        break
+                    elif local_path:
+                        # إرسال من الملف المحلي
+                        file_path = local_path.replace('\\', '/')
+                        if not os.path.isabs(file_path):
+                            file_path = os.path.join(os.getcwd(), file_path)
+                        
+                        if os.path.exists(file_path):
+                            with open(file_path, 'rb') as f:
+                                await context.bot.send_document(
+                                    chat_id=query.from_user.id,
+                                    document=f,
+                                    caption=f"📚 **{title}**\n\n✅ تم التحميل بنجاح!",
+                                    parse_mode='Markdown',
+                                    filename=os.path.basename(file_path)
+                                )
+                            break
+                        else:
+                            logger.error(f"الملف المحلي غير موجود: {file_path}")
+                else:
+                    # لم يتم إرسال أي ملف
+                    await query.answer("❌ لم يتم العثور على ملفات متاحة", show_alert=True)
+                    return
             
             await query.message.reply_text(
                 f"✅ تم إرسال الكتاب إليك!\n\n"
@@ -2766,7 +2631,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     text = update.message.text if update.message.text else ""
     
-    # ملاحظة: تم نقل فحص WAITING_FOR_QUERY إلى unified_message_router
+    # ========== معالجة الاستفسار الذكي (RAG) ==========
+    if user_state.get(user.id) == "WAITING_FOR_QUERY":
+        await handle_smart_query(update, context)
+        user_state[user.id] = None  # إنهاء حالة الاستفسار
+        return
     
     # ========== تحديث حالة الكتب (أدمن) ==========
     if context.user_data.get('awaiting_books_status'):
@@ -3947,17 +3816,34 @@ def main():
         return
     
     # بناء قاعدة البيانات قبل التشغيل (إذا لزم الأمر)
-    # ملاحظة: نستخدم asyncio.run() بدلاً من event loop يدوي
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        db_ready = asyncio.run(setup_database_once())
+        db_ready = loop.run_until_complete(setup_database_once())
         if not db_ready:
-            logger.critical("�!! فشل إعداد قاعدة البيانات. البوت سيعمل بميزات محدودة أو قد يتوقف.")
+            logger.critical("!!! فشل إعداد قاعدة البيانات. البوت سيعمل بميزات محدودة أو قد يتوقف.")
             # يمكنك إيقاف البوت تماماً إذا أردت
             # return
     except Exception as e:
         logger.warning(f"تحذير في بناء قاعدة البيانات: {e}")
+    # لا نغلق loop لأن البوت سيستخدمه
     
-    application = Application.builder().token(Config.BOT_TOKEN).build()
+    # إنشاء التطبيق مع إعدادات timeout محسّنة
+    from telegram.request import HTTPXRequest
+    
+    # زيادة وقت الانتظار للملفات الكبيرة
+    request = HTTPXRequest(
+        connection_pool_size=8,
+        connect_timeout=30.0,      # 30 ثانية للاتصال
+        read_timeout=60.0,         # 60 ثانية للقراءة
+        write_timeout=120.0,       # 120 ثانية للكتابة (رفع الملفات)
+        pool_timeout=30.0
+    )
+    
+    application = Application.builder() \
+        .token(Config.BOT_TOKEN) \
+        .request(request) \
+        .build()
     
     # ⚙️ جدولة المهام الآلية (Job Queue)
     job_queue = application.job_queue
@@ -3997,41 +3883,23 @@ def main():
     # الأزرار
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    # الرسائل - الأولوية: فحص حالة المستخدم أولاً!
-    async def unified_message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """معالج موحد يحل مشكلة استفسار ذكي"""
-        user = update.effective_user
-        text = update.message.text
-        
-        # الأولوية 1: إذا كان في وضع انتظار استفسار ذكي
-        if user_state.get(user.id) == "WAITING_FOR_QUERY":
-            await handle_smart_query(update, context)
-            user_state[user.id] = None
-            return
-        
-        # الأولوية 2: تسجيل دخول الأدمن
-        if (context.user_data.get('awaiting_admin_password') or 
-            context.user_data.get('awaiting_admin_name') or 
-            context.user_data.get('awaiting_admin_email')):
-            await process_admin_login(update, context)
-            return
-        
-        # الأولوية 3: أزرار لوحة المفاتيح
-        if text in [
-            "📰 الأخبار", "📚 حالة الكتب", "📖 المكتبة", 
-            "📚 كتبي", "⭐ المفضلة", "🔔 إشعارات",
-            "❓ مساعدة", "💬 استفسار", "❓ طرح استفسار",
-            "❓ طرح استفسار ذكي", "📊 آخر 5 أخبار رسمية"
-        ]:
-            await keyboard_handler(update, context)
-            return
-        
-        # الأولوية 4: معالج عام للرسائل
-        await message_handler(update, context)
-    
+    # الرسائل - أولوية للكيبورد ثم معالجات أخرى
     application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        unified_message_router
+        filters.TEXT & ~filters.COMMAND, 
+        lambda u, c: (
+            process_admin_login(u, c) if (
+                c.user_data.get('awaiting_admin_password') or 
+                c.user_data.get('awaiting_admin_name') or 
+                c.user_data.get('awaiting_admin_email')
+            ) else (
+                keyboard_handler(u, c) if u.message.text in [
+                    "📰 الأخبار", "📚 حالة الكتب", "📖 المكتبة", 
+                    "📚 كتبي", "⭐ المفضلة", "🔔 إشعارات",
+                    "❓ مساعدة", "💬 استفسار", "❓ طرح استفسار",
+                    "❓ طرح استفسار ذكي", "📊 آخر 5 أخبار رسمية"
+                ] else message_handler(u, c)
+            )
+        )
     ))
     
     # الملفات

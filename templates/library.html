@@ -1,0 +1,85 @@
+{% extends "layout.html" %}
+
+{% block title %}المكتبة - بوابة مرشد الدراسة{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-book text-primary"></i> المكتبة الإلكترونية</h2>
+        <a href="{{ url_for('upload_book') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> إضافة كتاب جديد
+        </a>
+    </div>
+    
+    {% if books and books|length > 0 %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> يوجد {{ books|length }} كتاب في المكتبة
+    </div>
+    
+    <div class="row">
+        {% for book in books %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h5 class="card-title">
+                            <i class="fas fa-book-open text-primary"></i>
+                            {{ book.title }}
+                        </h5>
+                        {% if current_user.is_authenticated %}
+                            {% if book.uploaded_by == current_user.id or current_user.username == 'admin' %}
+                            <form method="POST" action="{{ url_for('delete_book', book_id=book.id) }}" 
+                                  onsubmit="return confirm('هل أنت متأكد من حذف هذا الكتاب؟');" style="display:inline;">
+                                <button type="submit" class="btn btn-sm btn-danger">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    
+                    {% if book.author %}
+                    <p class="text-muted mb-2">
+                        <i class="fas fa-user"></i> <strong>الناشر:</strong> {{ book.author }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if book.category %}
+                    <p class="text-muted mb-2">
+                        <i class="fas fa-tag"></i> <strong>التصنيف:</strong> {{ book.category }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if book.description %}
+                    <p class="card-text">{{ book.description[:150] }}{% if book.description|length > 150 %}...{% endif %}</p>
+                    {% endif %}
+                    
+                    <hr>
+                    
+                    <div class="d-flex justify-content-between align-items-center text-muted small mb-3">
+                        <span><i class="fas fa-download"></i> {{ book.downloads }} تحميل</span>
+                        <span><i class="fas fa-calendar"></i> {{ book.uploaded_at.strftime('%Y-%m-%d') }}</span>
+                    </div>
+                    
+                    <a href="{{ url_for('download_book', book_id=book.id) }}" class="btn btn-primary w-100">
+                        <i class="fas fa-download"></i> تحميل الكتاب
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-book-open fa-5x text-muted mb-3"></i>
+        <h4 class="text-muted">لا توجد كتب في المكتبة حالياً</h4>
+        <p class="text-muted">كن أول من يضيف كتاباً!</p>
+        <a href="{{ url_for('upload_book') }}" class="btn btn-primary mt-3">
+            <i class="fas fa-plus"></i> إضافة كتاب
+        </a>
+    </div>
+    {% endif %}
+    
+</div>
+{% endblock %}
