@@ -1,0 +1,104 @@
+# ===================================
+# .gitignore - بوابة مرشد الدراسة V3.0
+# ===================================
+
+# 🔐 ملفات الأسرار والمفاتيح (CRITICAL!)
+.env
+*.env
+.env.local
+.env.production
+
+# 📊 قواعد البيانات
+*.db
+*.sqlite
+*.sqlite3
+school_bot.db
+database.db
+
+# 🗂️ قاعدة بيانات المتجهات (ChromaDB)
+db/
+test_db/
+chroma_data/
+chroma.sqlite3
+*.chroma
+
+# 📱 ملفات جلسة Telethon (مهم جداً!)
+*.session
+*.session-journal
+anon.session
+anon_live.session
+
+# 📂 الملفات المرفوعة
+static/uploads/
+uploads/
+static/uploads/*.pdf
+static/uploads/*.jpg
+static/uploads/*.png
+
+# 🗄️ مجلدات قاعدة البيانات
+instance/
+
+# 📝 ملفات السجلات
+logs/
+*.log
+
+# 🐍 ملفات Python المؤقتة
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 🔄 بيئة افتراضية
+venv/
+env/
+ENV/
+virtualenv/
+
+# 🧪 ملفات الاختبار
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# 💻 ملفات IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 📦 ملفات مؤقتة
+*.tmp
+*.bak
+*.cache
+
+# 🔧 ملفات النظام
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ملاحظات مهمة:
+# - ملف .env يحتوي على جميع المفاتيح السرية - لا ترفعه أبداً!
+# - قاعدة بيانات ChromaDB (db/) يجب بناؤها على السيرفر
+# - ملفات الجلسات (.session) خاصة بجهازك المحلي فقط
+# - الملفات المرفوعة (uploads/) قد تكون كبيرة - لا ترفعها
+
