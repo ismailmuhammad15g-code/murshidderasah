@@ -5,7 +5,6 @@
 
 import logging
 from config import Config
-import vector_store
 import google.generativeai as genai
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from telegram.ext import ContextTypes
@@ -50,7 +49,7 @@ def get_next_chat_model():
 
 async def get_smart_reply(question: str) -> dict:
     """
-    الدالة الذكية الرئيسية - تستخدمها التليجرام والموقع
+    الدالة الذكية الرئيسية - رد مباشر من Gemini بدون vector store
     
     Args:
         question: سؤال المستخدم
@@ -60,81 +59,32 @@ async def get_smart_reply(question: str) -> dict:
     """
     logger.info(f"🤔 استفسار جديد: {question[:50]}...")
     
-    # 1. البحث الهجين الذكي (من vector_store.py)
-    evidence_list = vector_store.search_database(question)
-    
-    if not evidence_list:
-        return {
-            "answer": "أهلاً بك! 👋 بحثت لك في سجلات القناة، لكن لم أجد معلومة واضحة بخصوص هذا الموضوع. 🔍\n\n"
-                     "💡 نصيحة: حاول إعادة صياغة السؤال أو استخدام كلمات مفتاحية أخرى.",
-            "links": []
-        }
-    
-    # 2. بناء البرومبت الودود والمحلل
-    evidence_context = ""
-    for i, ev in enumerate(evidence_list, 1):
-        doc_type = ev.get('type', 'unknown')
-        source_tag = ev.get('source_tag', 'public_channel')
-        
-        # إضافة معلومات المصدر
-        source_info = ""
-        if source_tag == "accommodations":
-            source_info = " [جروب الإقامات]"
-        elif doc_type == "admin":
-            source_info = " [منشور رسمي]"
-        elif doc_type == "student":
-            source_info = " [نقاش طلاب]"
-        
-        evidence_context += f"--- دليل {i}{source_info} (الرابط: {ev['link']}) ---\n{ev['text']}\n\n"
-    
+    # البرومبت البسيط للإجابة مباشرة
     final_prompt = f"""أنت "مرشد الدراسة"، مساعد ذكي وودود مُتخصص في مساعدة طلاب المعاهد الأزهرية. 📚
 
-مهمتك هي الإجابة على سؤال الطالب بناءً على الأدلة المُرفقة من القناة الرسمية والمصادر الموثوقة.
+أجب على السؤال التالي بطريقة ودية ومفيدة:
 
-🎯 **قواعد الإجابة:**
-
-1. **التحليل الشامل**: اقرأ جميع الأدلة بعناية، واجمع المعلومات من مصادر متعددة
-2. **الوضوح والتنظيم**: قسّم الإجابة إلى نقاط واضحة إذا كان الموضوع معقداً
-3. **الاقتباس الدقيق**: عند نقل معلومة رسمية، ضع اقتباساً مباشراً بين علامتي "..."
-4. **السياق الكامل**: اذكر التفاصيل المهمة (تواريخ، شروط، خطوات)
-5. **النبرة الودودة**: استخدم الإيموجي بذكاء، وكن مشجعاً وداعماً
-6. **الأمانة**: إذا لم تجد إجابة واضحة، أو كانت المعلومة غير كافية، قل ذلك صراحة
-
----
-
-**سؤال الطالب:**
+**السؤال:**
 {question}
 
----
-
-**الأدلة المتوفرة:**
-{evidence_context}
-
----
-
-**إجابتك** (ودية، محللة، مع اقتباس منسق إذا لزم):
+**إجابتك** (ودية، واضحة، مع استخدام الإيموجي بذكاء):
 """
     
     try:
-        # 3. اختيار المفتاح والرد
+        # اختيار المفتاح والرد
         chat_model = get_next_chat_model()
         response = chat_model.generate_content(final_prompt)
         
-        # 4. إرجاع الرد والأدلة
-        links = [ev['link'] for ev in evidence_list]
-        unique_links = list(dict.fromkeys(links))  # إزالة التكرار
-        
         return {
             "answer": response.text,
-            "links": unique_links[:5]  # أفضل 5 روابط
+            "links": []  # لا توجد روابط حاليًا
         }
         
     except Exception as e:
         logger.error(f"❌ خطأ في توليد الرد: {e}")
         return {
-            "answer": f"عذراً، حدث خطأ أثناء معالجة سؤالك. 😔\n\n"
-                     f"يمكنك مراجعة المصادر التالية مباشرة للحصول على المعلومة.",
-            "links": [ev['link'] for ev in evidence_list][:5]
+            "answer": "عذراً، حدث خطأ أثناء معالجة سؤالك. 😔\n\nيرجى المحاولة مرة أخرى لاحقاً.",
+            "links": []
         }
 
 
@@ -178,38 +128,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_latest_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض آخر 5 أخبار رسمية"""
-    
-    try:
-        # البحث عن أحدث منشورات الأدمن
-        vector_store._init_chromadb()
-        
-        # استعلام للحصول على آخر الأخبار
-        recent_news = vector_store.collection.query(
-            query_embeddings=None,
-            where={"type": "admin"},
-            n_results=5
-        )
-        
-        if not recent_news or not recent_news['metadatas'] or not recent_news['metadatas'][0]:
-            await update.message.reply_text("لا توجد أخبار رسمية حالياً. 🔍")
-            return
-        
-        news_text = "📊 **آخر 5 أخبار رسمية:**\n\n"
-        
-        for i, meta in enumerate(recent_news['metadatas'][0], 1):
-            text_preview = meta['text'][:100] + "..." if len(meta['text']) > 100 else meta['text']
-            news_text += f"{i}. {text_preview}\n🔗 {meta['link']}\n\n"
-        
-        await update.message.reply_text(
-            news_text,
-            parse_mode='Markdown',
-            disable_web_page_preview=True
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ خطأ في جلب الأخبار: {e}")
-        await update.message.reply_text("عذراً، حدث خطأ أثناء جلب الأخبار. 😔")
+    """عرض رسالة بديلة - الميزة غير متاحة حاليًا"""
+    await update.message.reply_text(
+        "📊 هذه الميزة قيد التطوير حالياً. 🔧\n\n"
+        "يمكنك زيارة القناة الرسمية مباشرة للاطلاع على آخر الأخبار."
+    )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
