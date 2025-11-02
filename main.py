@@ -3919,11 +3919,13 @@ def main():
         filters.TEXT & ~filters.COMMAND, 
         lambda u, c: (
             process_admin_login(u, c) if (
-                c.user_data.get('awaiting_admin_password') or 
-                c.user_data.get('awaiting_admin_name') or 
-                c.user_data.get('awaiting_admin_email')
+                c.user_data and (
+                    c.user_data.get('awaiting_admin_password') or 
+                    c.user_data.get('awaiting_admin_name') or 
+                    c.user_data.get('awaiting_admin_email')
+                )
             ) else (
-                keyboard_handler(u, c) if u.message.text in [
+                keyboard_handler(u, c) if u.message and u.message.text in [
                     "📰 الأخبار", "📚 حالة الكتب", "📖 المكتبة", 
                     "📚 كتبي", "⭐ المفضلة", "🔔 إشعارات",
                     "❓ مساعدة", "💬 استفسار", "❓ طرح استفسار",
