@@ -28,7 +28,7 @@ google-generativeai==0.3.2
 # === قاعدة بيانات المتجهات - ChromaDB (احترافي وقوي!) ===
 chromadb==0.4.24
 hnswlib==0.8.0
-numpy>=1.26.2
+numpy>=1.26.2,<2.0
 
 # === معالجة الملفات والبيانات ===
 python-dotenv==1.0.0
