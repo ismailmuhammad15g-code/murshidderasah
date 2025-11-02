@@ -89,6 +89,31 @@ python -c "from database import init_db; init_db()"
 
 ---
 
+## 🎨 Static Files Section (اختياري لكن مهم)
+
+هذا القسم لتسريع تحميل الصور والـ CSS والـ JavaScript.
+
+### اضغط "Add a new static file mapping" أو املأ مباشرة:
+
+| URL | Directory |
+|-----|----------|
+| `/static/` | `/home/murshidderasah/murshidderasah/static` |
+| `/uploads/` | `/home/murshidderasah/murshidderasah/static/uploads` |
+
+**كيفية الإضافة:**
+1. في حقل **URL**: اكتب `/static/`
+2. في حقل **Directory**: اكتب `/home/murshidderasah/murshidderasah/static`
+3. اضغط ✓ (علامة الصح) أو **Enter**
+
+**للـ uploads (إذا أردت):**
+1. في حقل **URL**: اكتب `/uploads/`
+2. في حقل **Directory**: اكتب `/home/murshidderasah/murshidderasah/static/uploads`
+3. اضغط ✓
+
+💡 **ملاحظة:** هذا القسم اختياري، لكنه يحسّن الأداء كثيراً!
+
+---
+
 ## 📝 WSGI Configuration File
 
 ### 1️⃣ افتح الملف
@@ -154,11 +179,16 @@ https://murshidderasah.pythonanywhere.com
 
 تأكد من:
 
+### الإعدادات الأساسية:
 - [ ] Source code = `/home/murshidderasah/murshidderasah`
 - [ ] Working directory = `/home/murshidderasah/murshidderasah`  
 - [ ] Virtualenv = `/home/murshidderasah/.virtualenvs/murshid`
 - [ ] WSGI file محدّث بالكود الجديد
 - [ ] ملف `.env` موجود وفيه المفاتيح الصحيحة
+
+### Static Files (اختياري):
+- [ ] Static mapping: `/static/` → `/home/murshidderasah/murshidderasah/static`
+- [ ] Uploads mapping: `/uploads/` → `/home/murshidderasah/murshidderasah/static/uploads`
 
 ---
 
