@@ -9,7 +9,8 @@ class Config:
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 
     # Webhook/Server Configuration
-    WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # مثال: https://your-domain/webhook
+    WEBSITE_URL = os.getenv("WEBSITE_URL")  # مثال: https://yourusername.pythonanywhere.com
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # مثال: https://yourusername.pythonanywhere.com/webhook
     HOST = os.getenv("HOST", "0.0.0.0")
     PORT = int(os.getenv("PORT", "8080"))
     
