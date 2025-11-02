@@ -25,6 +25,11 @@ import scraper
 import vector_store
 import google.generativeai as genai
 
+# === استيراد APScheduler للمهام الآلية ===
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+import pytz
+
 # تهيئة السجل (Logging)
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -3760,15 +3765,18 @@ async def process_admin_login(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data.pop('admin_name_input', None)
         return
 
-# ============== Job Queue - التحديث الآلي ==============
+# ============== APScheduler - المهام الآلية (للإنتاج) ==============
 
-async def scrape_new_messages(context: ContextTypes.DEFAULT_TYPE):
+async def scrape_new_messages_job():
     """
-    مهمة "الباحث السريع" - تعمل كل 5 دقائق
+    🔍 مهمة "الباحث السريع" - تعمل كل 5 دقائق
     تسحب الرسائل الجديدة من القناة وتضيفها لقاعدة البيانات
+    (متوافقة مع APScheduler - بدون context)
     """
     try:
-        logger.info("🔍 بدء مهمة التحديث الآلي...")
+        logger.info("="*60)
+        logger.info("🔍 بدء مهمة التحديث الآلي (APScheduler)...")
+        logger.info("="*60)
         
         # سحب الرسائل من آخر 10 دقائق
         new_documents = await scraper.scrape_recent_messages(minutes=10)
@@ -3780,18 +3788,23 @@ async def scrape_new_messages(context: ContextTypes.DEFAULT_TYPE):
                 logger.info(f"✅ تم تحديث قاعدة البيانات بـ {added} رسالة جديدة")
         else:
             logger.info("ℹ️ لا توجد رسائل جديدة")
+        
+        logger.info("="*60)
     
     except Exception as e:
         logger.error(f"❌ خطأ في مهمة التحديث الآلي: {e}")
 
 
-async def prune_old_messages(context: ContextTypes.DEFAULT_TYPE):
+async def prune_old_messages_job():
     """
-    مهمة "عامل النظافة" - تعمل مرة يومياً
+    🧹 مهمة "عامل النظافة" - تعمل مرة يومياً (عند 3 فجراً)
     تحذف الرسائل الأقدم من 365 يوم
+    (متوافقة مع APScheduler - بدون context)
     """
     try:
-        logger.info("🧹 بدء مهمة تنظيف الرسائل القديمة...")
+        logger.info("="*60)
+        logger.info("🧹 بدء مهمة تنظيف الرسائل القديمة (APScheduler)...")
+        logger.info("="*60)
         
         deleted = vector_store.delete_old_messages(days=365)
         
@@ -3799,6 +3812,8 @@ async def prune_old_messages(context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"✅ تم حذف {deleted} رسالة قديمة")
         else:
             logger.info("ℹ️ لا توجد رسائل قديمة لحذفها")
+        
+        logger.info("="*60)
     
     except Exception as e:
         logger.error(f"❌ خطأ في مهمة التنظيف: {e}")
@@ -3845,26 +3860,42 @@ def main():
         .request(request) \
         .build()
     
-    # ⚙️ جدولة المهام الآلية (Job Queue)
-    job_queue = application.job_queue
+    # === 📅 APScheduler - جدولة المهام الآلية (للإنتاج) ===
+    # ملاحظة: سيتم تشغيل scheduler بعد بدء التطبيق
+    async def post_init(application):
+        """تشغيل APScheduler بعد بدء التطبيق"""
+        scheduler = AsyncIOScheduler(timezone=pytz.timezone('Asia/Riyadh'))
+        
+        # 🔍 مهمة 1: الباحث السريع - كل 5 دقائق
+        scheduler.add_job(
+            scrape_new_messages_job,
+            'interval',
+            minutes=5,
+            id='scraper_job',
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("✅ تم جدولة مهمة 'الباحث السريع' (كل 5 دقائق) - APScheduler")
+        
+        # 🧹 مهمة 2: عامل النظافة - يومياً عند 3 فجراً
+        scheduler.add_job(
+            prune_old_messages_job,
+            CronTrigger(hour=3, minute=0, timezone=pytz.timezone('Asia/Riyadh')),
+            id='cleanup_job',
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("✅ تم جدولة مهمة 'عامل النظافة' (يومياً 3:00ص بتوقيت السعودية) - APScheduler")
+        
+        # تشغيل المجدول (الآن event loop يعمل)
+        scheduler.start()
+        logger.info("✅ تم تشغيل APScheduler بنجاح")
+        
+        # حفظ scheduler في application لاستخدامه لاحقاً
+        application.bot_data['scheduler'] = scheduler
     
-    # 🔍 مهمة 1: الباحث السريع - كل 5 دقائق
-    job_queue.run_repeating(
-        scrape_new_messages,
-        interval=300,  # 300 ثانية = 5 دقائق
-        first=10,      # يبدأ بعد 10 ثواني من التشغيل
-        name="scraper_job"
-    )
-    logger.info("✅ تم جدولة مهمة 'الباحث السريع' (كل 5 دقائق)")
-    
-    # 🧹 مهمة 2: عامل النظافة - يومياً عند 3 فجراً
-    import datetime
-    job_queue.run_daily(
-        prune_old_messages,
-        time=datetime.time(hour=3, minute=0),  # 3:00 صباحاً
-        name="cleanup_job"
-    )
-    logger.info("✅ تم جدولة مهمة 'عامل النظافة' (يومياً 3:00ص)")
+    # إضافة post_init callback
+    application.post_init = post_init
 
     # إضافة معالج أخطاء عام لتجنب توقف التطبيق دون تسجيل مناسب
     async def error_handler(update, context):

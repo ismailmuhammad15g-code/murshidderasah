@@ -226,7 +226,8 @@ def search_database(query_text, top_k=10):
         # جمع النتائج
         results = []
         for i, idx in enumerate(indices[0]):
-            if idx < len(metadata_list):
+            # تجاهل النتائج غير الصالحة (idx = -1 يعني لم يتم العثور)
+            if idx >= 0 and idx < len(metadata_list):
                 result = metadata_list[idx].copy()
                 result['distance'] = float(distances[0][i])
                 result['rank'] = i + 1

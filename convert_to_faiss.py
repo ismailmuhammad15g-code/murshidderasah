@@ -55,20 +55,58 @@ def convert_chromadb_to_faiss():
         
         # جلب المجموعة
         try:
-            collection = client.get_collection("school_messages")
+            # محاولة أسماء مختلفة للمجموعة
+            collection_names = ["morshed_db", "school_messages", "messages"]
+            collection = None
+            
+            for name in collection_names:
+                try:
+                    collection = client.get_collection(name)
+                    logger.info(f"✅ تم العثور على المجموعة: {name}")
+                    break
+                except:
+                    continue
+            
+            if collection is None:
+                # جلب جميع المجموعات الموجودة
+                all_collections = client.list_collections()
+                if all_collections:
+                    collection = all_collections[0]
+                    logger.info(f"✅ استخدام المجموعة: {collection.name}")
+                else:
+                    raise Exception("لا توجد مجموعات في قاعدة البيانات")
+                    
         except Exception as e:
-            logger.error(f"❌ لم يتم العثور على مجموعة school_messages: {e}")
+            logger.error(f"❌ لم يتم العثور على أي مجموعة: {e}")
             logger.error("💡 تأكد من أن قاعدة ChromaDB موجودة في: " + Config.DB_PATH)
             return False
         
         # جلب جميع البيانات
         logger.info("📥 جلب جميع البيانات من ChromaDB...")
         
-        results = collection.get(
-            include=['documents', 'metadatas']
-        )
+        # جلب عدد المستندات أولاً
+        total_count = collection.count()
+        logger.info(f"📊 عدد المستندات في المجموعة: {total_count}")
         
-        total_docs = len(results['ids'])
+        # جلب البيانات على دفعات
+        batch_size = 1000
+        all_documents = []
+        all_metadatas = []
+        
+        for offset in range(0, total_count, batch_size):
+            logger.info(f"⏳ جلب دفعة {offset//batch_size + 1}/{(total_count + batch_size - 1)//batch_size}...")
+            
+            batch = collection.get(
+                limit=batch_size,
+                offset=offset,
+                include=['documents', 'metadatas']
+            )
+            
+            if batch and batch.get('documents'):
+                all_documents.extend(batch['documents'])
+                all_metadatas.extend(batch.get('metadatas', [{}] * len(batch['documents'])))
+        
+        total_docs = len(all_documents)
         logger.info(f"✅ تم جلب {total_docs} مستند")
         
         if total_docs == 0:
@@ -80,11 +118,12 @@ def convert_chromadb_to_faiss():
         
         documents = []
         for i in range(total_docs):
+            metadata = all_metadatas[i] if i < len(all_metadatas) else {}
             doc = {
-                'text': results['documents'][i],
-                'link': results['metadatas'][i].get('link', ''),
-                'type': results['metadatas'][i].get('type', 'student'),
-                'date': results['metadatas'][i].get('date', '')
+                'text': all_documents[i],
+                'link': metadata.get('link', ''),
+                'type': metadata.get('type', 'student'),
+                'date': metadata.get('date', '')
             }
             documents.append(doc)
         
