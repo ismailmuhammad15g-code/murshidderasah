@@ -81,8 +81,9 @@ def send_verification_email(email: str, name: str, verification_token: str) -> b
         bool: True إذا نجح الإرسال، False إذا فشل
     """
     try:
-        # بناء رابط التفعيل
-        verification_url = f"http://localhost:{Config.PORT}/verify-email?token={verification_token}"
+        # بناء رابط التفعيل (استخدام WEBSITE_URL من Config)
+        base_url = Config.WEBSITE_URL.rstrip('/')
+        verification_url = f"{base_url}/verify-email?token={verification_token}"
         
         # إنشاء الرسالة
         msg = MIMEMultipart('alternative')
