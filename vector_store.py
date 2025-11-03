@@ -31,8 +31,9 @@ try:
     genai.configure(api_key=first_google_key)
     logger.info("✅ تم إعداد نموذج Google Embedding بنجاح.")
 except StopIteration:
-    logger.error("❌ لم يتم العثور على مفتاح Google API صالح في الإعدادات.")
-    raise Exception("Google API Key not found")
+    logger.warning("⚠️ لم يتم العثور على مفتاح Google API صالح في الإعدادات.")
+except Exception as e:
+    logger.warning(f"⚠️ خطأ في إعداد Google AI: {e}")
 
 # --- تهيئة الاتصال بـ Pinecone (الخادم) ---
 pinecone_index = None
