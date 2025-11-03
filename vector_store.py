@@ -40,17 +40,22 @@ pinecone_index = None
 try:
     from pinecone import Pinecone
     
-    pc = Pinecone(api_key=Config.PINECONE_API_KEY)
-    
-    # التأكد من أن الـ Host URL لا يحتوي على "https://"
-    host_url = Config.PINECONE_HOST.replace("https://", "")
-    
-    pinecone_index = pc.Index(host=host_url)
-    stats = pinecone_index.describe_index_stats()
-    logger.info(f"✅ تم الاتصال بـ Pinecone بنجاح. عدد المتجهات الحالي: {stats.get('total_vector_count', 0)}")
+    # التحقق من وجود الإعدادات
+    if Config.PINECONE_API_KEY and Config.PINECONE_HOST:
+        pc = Pinecone(api_key=Config.PINECONE_API_KEY)
+        
+        # التأكد من أن الـ Host URL لا يحتوي على "https://"
+        host_url = Config.PINECONE_HOST.replace("https://", "")
+        
+        pinecone_index = pc.Index(host=host_url)
+        stats = pinecone_index.describe_index_stats()
+        logger.info(f"✅ تم الاتصال بـ Pinecone بنجاح. عدد المتجهات الحالي: {stats.get('total_vector_count', 0)}")
+    else:
+        logger.warning("⚠️ إعدادات Pinecone غير موجودة. سيتم العمل بدون vector store.")
 except Exception as e:
     logger.error(f"❌ فشل الاتصال بـ Pinecone: {e}")
-    raise e
+    logger.warning("⚠️ سيتم العمل بدون vector store.")
+    pinecone_index = None
 
 
 def get_embedding(text: str, task_type: str) -> list:
