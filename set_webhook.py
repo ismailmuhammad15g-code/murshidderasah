@@ -38,25 +38,27 @@ async def main():
         return False
     
     # إنشاء رابط الـ Webhook
-    webhook_url = f"{Config.WEBSITE_URL}/webhook"
+    # إزالة / الزائدة إن وجدت
+    base_url = Config.WEBSITE_URL.rstrip('/')
+    webhook_url = f"{base_url}/webhook"
     
-    print(f"\n📌 رابط الموقع: {Config.WEBSITE_URL}")
-    print(f"📌 رابط Webhook: {webhook_url}")
-    print(f"📌 توكن البوت: {Config.BOT_TOKEN[:20]}...")
+    print(f"\n📋 رابط الموقع: {base_url}")
+    print(f"📋 رابط Webhook: {webhook_url}")
+    print(f"📋 توكن البوت: {Config.BOT_TOKEN[:20]}...")
     
     try:
-        from telegram.ext import Application
+        from telegram import Bot
         
         print("\n⏳ جاري الاتصال بـ Telegram...")
         
-        # إنشاء التطبيق
-        app = Application.builder().token(Config.BOT_TOKEN).build()
+        # إنشاء بوت بسيط
+        bot = Bot(token=Config.BOT_TOKEN)
         
         # إعداد الـ Webhook
-        await app.bot.set_webhook(webhook_url)
+        await bot.set_webhook(webhook_url)
         
         # التحقق من الإعداد
-        webhook_info = await app.bot.get_webhook_info()
+        webhook_info = await bot.get_webhook_info()
         
         print("\n✅ نجح إعداد Webhook!")
         print("\n📊 معلومات Webhook:")
