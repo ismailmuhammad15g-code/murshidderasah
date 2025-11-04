@@ -551,7 +551,7 @@ def library():
 @app.route('/upload', methods=['GET', 'POST'])
 @require_login
 def upload_book():
-    """صفحة رفع كتاب جديد - يحفظ في school_bot.db"""
+    """صفحة رفع كتاب جديد - يحفظ في Google Drive ثم school_bot.db"""
     if request.method == 'POST':
         # التحقق من وجود الملف
         if 'file' not in request.files:
@@ -570,12 +570,32 @@ def upload_book():
             return redirect(request.url)
         
         try:
-            # حفظ الملف
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
+            import time
+            from drive_uploader import upload_book as upload_to_drive
             
-            # حفظ في school_bot.db
+            # 1. حفظ الملف مؤقتاً على السيرفر
+            filename = secure_filename(file.filename)
+            temp_dir = "/tmp/uploads"  # مسار آمن للكتابة
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir)
+            temp_path = os.path.join(temp_dir, f"{int(time.time())}_{filename}")
+            file.save(temp_path)
+            
+            logger.info(f"⏳ جارِ رفع الملف إلى Google Drive: {filename}")
+            
+            # 2. رفع الملف إلة Google Drive
+            drive_link = upload_to_drive(temp_path)
+            
+            # 3. حذف الملف المؤقت
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                logger.info(f"✅ تم حذف الملف المؤقت: {temp_path}")
+            
+            if not drive_link:
+                flash('فشل رفع الملف إلى Google Drive. حاول مرة أخرى.', 'danger')
+                return redirect(request.url)
+            
+            # 4. حفظ في school_bot.db (مع رابط Google Drive)
             title = request.form.get('title', 'بدون عنوان')
             description = request.form.get('description', '')
             category = request.form.get('category', 'عام')
@@ -583,9 +603,9 @@ def upload_book():
             conn = sqlite3.connect('school_bot.db')
             cursor = conn.cursor()
             
-            # إنشاء file_id فريد (بديل مؤقت لحين رفع من الموقع)
-            import uuid
-            temp_file_id = f"local_{uuid.uuid4().hex[:16]}"
+            # استخراج file_id من رابط Google Drive
+            # الرابط يكون بصيغة: https://drive.google.com/file/d/FILE_ID/view
+            file_id = drive_link.split('/d/')[1].split('/')[0] if '/d/' in drive_link else drive_link
             
             cursor.execute("""
                 INSERT INTO library (
@@ -593,7 +613,7 @@ def upload_book():
                     uploader_id, uploader_name, upload_date, approved
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                title, description, temp_file_id, 'application/pdf', 'book', category,
+                title, description, file_id, 'application/pdf', 'book', category,
                 session['user_id'], session['name'], 
                 datetime.now().isoformat(), 
                 1  # معتمد تلقائياً
@@ -601,21 +621,22 @@ def upload_book():
             
             book_id = cursor.lastrowid
             
-            # حفظ مسار الملف المحلي
+            # حفظ رابط Google Drive في library_files
             cursor.execute("""
-                INSERT INTO library_files (library_item_id, file_type, local_path)
-                VALUES (?, ?, ?)
-            """, (book_id, 'application/pdf', file_path))
+                INSERT INTO library_files (library_item_id, file_type, local_path, drive_link)
+                VALUES (?, ?, ?, ?)
+            """, (book_id, 'application/pdf', '', drive_link))  # local_path فارغ لأننا نستخدم Drive
             
             conn.commit()
             conn.close()
             
-            flash(f'تم رفع الكتاب "{title}" بنجاح! 📚 وسيظهر في البوت مباشرة.', 'success')
-            logger.info(f"✅ تم رفع كتاب جديد: {title} (ID: {book_id})")
+            flash(f'تم رفع الكتاب "{title}" بنجاح إلى Google Drive! 📚☁️', 'success')
+            logger.info(f"✅ تم رفع كتاب جديد: {title} (ID: {book_id}, Drive Link: {drive_link})")
             return redirect(url_for('library'))
             
         except Exception as e:
             logger.error(f"❌ خطأ في رفع الكتاب: {e}")
+            logger.exception(e)
             flash('حدث خطأ أثناء رفع الكتاب. حاول مرة أخرى.', 'danger')
             return redirect(request.url)
     

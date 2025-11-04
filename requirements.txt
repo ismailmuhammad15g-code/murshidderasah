@@ -23,6 +23,11 @@ google-generativeai==0.3.2
 # === قاعدة البيانات المتجهة (Pinecone) ===
 pinecone-client
 
+# === Google Drive API (لتخزين الكتب) ===
+google-api-python-client==2.108.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0
+
 # === معالجة الملفات والبيانات ===
 python-dotenv==1.0.0
 requests==2.31.0

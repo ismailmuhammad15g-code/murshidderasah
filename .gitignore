@@ -8,6 +8,10 @@
 .env.local
 .env.production
 
+# 🔑 ملفات Google Service Account
+murshidderasah-*.json
+*service-account*.json
+
 # 📊 قواعد البيانات
 *.db
 *.sqlite
