@@ -8,6 +8,7 @@ from config import Config
 import google.generativeai as genai
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from telegram.ext import ContextTypes
+import vector_store  # لاستخدام RAG
 
 # الإعداد
 logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ def get_next_chat_model():
 
 async def get_smart_reply(question: str) -> dict:
     """
-    الدالة الذكية الرئيسية - رد مباشر من Gemini بدون vector store
+    الدالة الذكية الرئيسية - مع تفعيل RAG (البحث في vector store)
     
     Args:
         question: سؤال المستخدم
@@ -59,8 +60,41 @@ async def get_smart_reply(question: str) -> dict:
     """
     logger.info(f"🤔 استفسار جديد: {question[:50]}...")
     
-    # البرومبت البسيط للإجابة مباشرة
-    final_prompt = f"""أنت "مرشد الدراسة"، مساعد ذكي وودود مُتخصص في مساعدة طلاب المعاهد الأزهرية. 📚
+    try:
+        # 1. البحث في vector store (حتى لو فارغ، سيرجع [])
+        search_results = vector_store.query_db(question, top_k=5)
+        
+        # 2. بناء البرومبت مع السياق (إن وُجد)
+        if search_results:
+            context = "\n\n".join([
+                f"نتيجة {i+1}:\n{result['text']}\n(المصدر: {result.get('message_id', 'غير محدد')})"
+                for i, result in enumerate(search_results)
+            ])
+            
+            final_prompt = f"""أنت "مرشد الدراسة"، مساعد ذكي وودود مُتخصص في مساعدة طلاب المعاهد الأزهرية. 📚
+
+لديك معلومات من القناة الرسمية لمساعدتك:
+
+**المعلومات المتاحة:**
+{context}
+
+**سؤال الطالب:**
+{question}
+
+**تعليماتك:**
+- استخدم المعلومات أعلاه للإجابة إن كانت ذات صلة
+- إذا لم تجد إجابة في المعلومات، أجِب بناءً على معرفتك
+- كُن ودياً وواضحاً ومفيداً
+- استخدم الإيموجي بذكاء ✨
+
+**إجابتك:**
+"""
+            
+            # جمع روابط المصادر
+            links = [result.get('link', '') for result in search_results if result.get('link')]
+        else:
+            # لا توجد نتائج - رد عادي
+            final_prompt = f"""أنت "مرشد الدراسة"، مساعد ذكي وودود مُتخصص في مساعدة طلاب المعاهد الأزهرية. 📚
 
 أجب على السؤال التالي بطريقة ودية ومفيدة:
 
@@ -69,19 +103,20 @@ async def get_smart_reply(question: str) -> dict:
 
 **إجابتك** (ودية، واضحة، مع استخدام الإيموجي بذكاء):
 """
-    
-    try:
-        # اختيار المفتاح والرد
+            links = []
+        
+        # 3. توليد الرد
         chat_model = get_next_chat_model()
         response = chat_model.generate_content(final_prompt)
         
         return {
             "answer": response.text,
-            "links": []  # لا توجد روابط حاليًا
+            "links": links
         }
         
     except Exception as e:
         logger.error(f"❌ خطأ في توليد الرد: {e}")
+        logger.exception(e)
         return {
             "answer": "عذراً، حدث خطأ أثناء معالجة سؤالك. 😔\n\nيرجى المحاولة مرة أخرى لاحقاً.",
             "links": []
