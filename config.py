@@ -77,6 +77,14 @@ class Config:
     PINECONE_HOST = os.getenv("PINECONE_HOST")
     
     # Flask App Configuration
-    FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "a-very-secret-key-for-flask")
+    # ⚠️ تحذير: يجب تعيين FLASK_SECRET_KEY في .env في الإنتاج!
+    _secret_key = os.getenv("FLASK_SECRET_KEY")
+    if not _secret_key or _secret_key == "a-very-secret-key-for-flask":
+        # إنشاء مفتاح عشوائي إذا لم يتم تعيينه
+        import secrets
+        _secret_key = secrets.token_hex(32)
+        print("⚠️ تحذير: يتم استخدام مفتاح سري عشوائي! قم بتعيين FLASK_SECRET_KEY في .env")
+    FLASK_SECRET_KEY = _secret_key
+    
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "static/uploads")
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI", "sqlite:///database.db")

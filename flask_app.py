@@ -151,19 +151,12 @@ def login():
         
         logger.info(f"محاولة تسجيل دخول: {username}")
         
-        # 1. فحص الأدمن الافتراضي
-        if username == 'admin' and password == 'admin123':
-            session.clear()
-            session['user_id'] = 99999999
-            session['username'] = 'admin'
-            session['name'] = 'المسؤول'
-            session.permanent = True
-            
-            logger.info(f"✅ تسجيل دخول ناجح (أدمن): {username}")
-            flash('مرحباً بك يا المسؤول! 👋', 'success')
-            return redirect(url_for('home'))
+        # 1. فحص الأدمن الافتراضي (معطل في الإنتاج)
+        # ملاحظة: يجب حذف هذا الحساب أو تغيير كلمة المرور في الإنتاج
+        # if username == 'admin' and password == 'admin123':
+        #     تم تعطيل الحساب التجريبي للأمان
         
-        # 2. فحص المستخدمين المسجلين
+        # فحص المستخدمين المسجلين
         try:
             conn = sqlite3.connect('school_bot.db')
             cursor = conn.cursor()
